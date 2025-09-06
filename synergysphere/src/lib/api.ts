@@ -1,7 +1,7 @@
 import { TaskLite, TaskStatus } from "@/lib/types";
 import { mockTasks } from "@/mocks/tasks";
 
-const USE_MOCKS = process.env.NEXT_PUBLIC_USE_MOCKS === "true";
+const USE_MOCKS = process.env.NEXT_PUBLIC_USE_MOCKS === "false";
 
 // Shared Helper Functions
 async function api<T>(url: string, init?: RequestInit): Promise<T> {
