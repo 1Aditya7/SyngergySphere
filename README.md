@@ -1,7 +1,7 @@
 🌐 SynergySphere
 
 A collaborative project management platform built with Next.js 15, Prisma, and PostgreSQL (Neon).
-Designed for hackathons: fast setup, clean UI, and extendable backend.
+Designed for :fast setup, clean UI, and extendable backend.
 
 
 🛠️ Tech Stack
@@ -68,4 +68,3 @@ Arindam Kalita – Auth Backend, Tasks, Discussions, Notifications
 
 ☁️ Offline cache & PWA support
 
-📜 License
