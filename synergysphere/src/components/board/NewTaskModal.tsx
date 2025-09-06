@@ -1,13 +1,27 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
-import AssignSelect from "./AssignSelect";
-import { TaskLite } from "@/lib/types";
+
+import * as React from "react";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { Calendar as CalendarIcon } from "lucide-react";
+import { cn } from "@/lib/utils";
+import AssigneeCombobox, { MemberLite } from "./AssigneeCombobox";
+import TagSelector, { TagLite } from "./TagSelector";
+import { format } from "date-fns";
+import { toast } from "sonner";
 
 type Payload = {
   title: string;
   description?: string;
   assigneeId?: string;
-  dueAt?: string; // ISO
+  dueAt?: string;           // ISO
+  tags?: { id?: string; name: string }[];
+  assignedById?: string;    // current user
 };
 
 export default function NewTaskModal({
@@ -16,108 +30,182 @@ export default function NewTaskModal({
   mode = "create",
   initial,
   onSubmit,
+  projectId,
+  members = [],
+  currentUserId,
+  initialTags = [],
 }: {
   open: boolean;
   onClose: () => void;
   mode?: "create" | "edit";
-  initial?: TaskLite | null;
+  initial?: {
+    title?: string;
+    description?: string;
+    assigneeId?: string;
+    dueAt?: string;
+    tags?: TagLite[];
+  } | null;
   onSubmit: (payload: Payload) => Promise<void>;
+  projectId?: string;
+  members?: MemberLite[];
+  currentUserId?: string;
+  initialTags?: TagLite[];
 }) {
-  const [title, setTitle] = useState("");
-  const [desc, setDesc] = useState("");
-  const [due, setDue] = useState<string>("");
-  const [assigneeId, setAssigneeId] = useState<string>("");
-  const [saving, setSaving] = useState(false);
-
   const isEdit = mode === "edit";
-  const header = useMemo(() => (isEdit ? "Edit Task" : "New Task"), [isEdit]);
 
-  useEffect(() => {
+  const [title, setTitle] = React.useState("");
+  const [desc, setDesc] = React.useState("");
+  const [assigneeId, setAssigneeId] = React.useState<string | undefined>(undefined);
+  const [due, setDue] = React.useState<Date | undefined>(undefined);
+  const [saving, setSaving] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  const [allTags, setAllTags] = React.useState<TagLite[]>(initialTags);
+  const [selTags, setSelTags] = React.useState<TagLite[]>([]);
+
+  React.useEffect(() => {
     if (!open) return;
+    setError(null);
     if (isEdit && initial) {
       setTitle(initial.title || "");
       setDesc(initial.description || "");
-      setAssigneeId(initial.assignee?.id || "");
-      setDue(initial.dueAt || "");
+      setAssigneeId(initial.assigneeId);
+      setDue(initial.dueAt ? new Date(initial.dueAt) : undefined);
+      setSelTags(initial.tags || []);
+      // merge any initial tags into pool
+      const merged = [...initialTags];
+      (initial.tags || []).forEach(t => {
+        if (!merged.find(m => m.name.toLowerCase() === t.name.toLowerCase())) merged.push(t);
+      });
+      setAllTags(merged);
     } else {
       setTitle("");
       setDesc("");
-      setAssigneeId("");
-      setDue("");
+      setAssigneeId(undefined);
+      setDue(undefined);
+      setSelTags([]);
+      setAllTags(initialTags);
     }
-  }, [open, isEdit, initial]);
+  }, [open, isEdit, initial, initialTags]);
 
-  if (!open) return null;
-
-  const dateInputValue = due ? new Date(due).toISOString().slice(0, 10) : "";
+  function createLocalTag(name: string): TagLite {
+    const t = { id: Math.random().toString(36).slice(2), name };
+    setAllTags(prev => [...prev, t]);
+    return t;
+  }
 
   async function handleSave() {
-    if (!title.trim()) return;
+    if (!title.trim()) {
+      setError("Title is required.");
+      return;
+    }
     setSaving(true);
     try {
       await onSubmit({
         title: title.trim(),
         description: desc || undefined,
-        assigneeId: assigneeId || undefined,
-        dueAt: due || undefined,
+        assigneeId,
+        dueAt: due ? due.toISOString() : undefined,
+        tags: selTags.map(t => ({ id: t.id, name: t.name })),
+        assignedById: currentUserId,
       });
+      toast.success(isEdit ? "Task updated" : "Task created", { description: title.trim() });
       onClose();
+    } catch (e: any) {
+      setError(e?.message || "Failed to save task.");
+      toast.error("Action failed", { description: e?.message || "Please try again." });
     } finally {
       setSaving(false);
     }
   }
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
-      <div className="w-full max-w-md rounded-xl bg-white p-4 shadow-xl dark:bg-zinc-900">
-        <div className="mb-3 text-base font-semibold">{header}</div>
+  const dueLabel = due ? format(due, "PPP") : "Pick a date";
 
-        <div className="space-y-3">
-          <input
-            className="w-full rounded-md border px-3 py-2 text-sm dark:bg-zinc-950 dark:border-zinc-800"
-            placeholder="Title *"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-          />
-          <textarea
-            className="w-full rounded-md border px-3 py-2 text-sm dark:bg-zinc-950 dark:border-zinc-800"
-            placeholder="Description"
-            rows={3}
-            value={desc}
-            onChange={(e) => setDesc(e.target.value)}
-          />
-          <div className="flex gap-3">
-            <input
-              type="date"
-              className="w-1/2 rounded-md border px-3 py-2 text-sm dark:bg-zinc-950 dark:border-zinc-800"
-              value={dateInputValue}
-              onChange={(e) =>
-                setDue(e.target.value ? new Date(e.target.value).toISOString() : "")
-              }
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{isEdit ? "Edit Task" : "Create Task"}</DialogTitle>
+        </DialogHeader>
+
+        <div className="grid gap-4 py-2">
+          <div className="grid gap-2">
+            <Label htmlFor="task-title">Title *</Label>
+            <Input
+              id="task-title"
+              placeholder="Short, clear title"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              maxLength={80}
             />
-            <div className="w-1/2">
-              <AssignSelect value={assigneeId} onChange={(id) => setAssigneeId(id || "")} />
-            </div>
           </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="task-desc">Description</Label>
+            <Textarea
+              id="task-desc"
+              placeholder="Add details, links, acceptance criteria…"
+              value={desc}
+              onChange={(e) => setDesc(e.target.value)}
+              rows={4}
+            />
+          </div>
+
+          <div className="grid gap-2">
+            <Label>Assignee</Label>
+            <AssigneeCombobox
+              members={members}
+              value={assigneeId}
+              onChange={setAssigneeId}
+              placeholder="Unassigned"
+            />
+          </div>
+
+          <div className="grid gap-2">
+            <Label>Tags</Label>
+            <TagSelector
+              value={selTags}
+              onChange={setSelTags}
+              allTags={allTags}
+              onCreateTag={createLocalTag}
+              placeholder="Select or create tags"
+            />
+          </div>
+
+          <div className="grid gap-2">
+            <Label>Due date</Label>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn("justify-start w-full", !due && "text-muted-foreground")}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {dueLabel}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="p-0">
+                <Calendar mode="single" selected={due} onSelect={setDue} initialFocus />
+              </PopoverContent>
+            </Popover>
+          </div>
+
+          {error && <p className="text-sm text-red-600">{error}</p>}
         </div>
 
-        <div className="mt-4 flex justify-end gap-2">
-          <button
-            onClick={onClose}
-            disabled={saving}
-            className="rounded-md border px-3 py-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50"
-          >
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={onClose} disabled={saving}>
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
             onClick={handleSave}
             disabled={saving || !title.trim()}
-            className="rounded-md bg-black px-3 py-2 text-sm text-white hover:opacity-90 disabled:opacity-50 dark:bg-white dark:text-black"
+            className="bg-blue-600 hover:bg-blue-700 text-white"
           >
             {isEdit ? "Save" : "Create"}
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
