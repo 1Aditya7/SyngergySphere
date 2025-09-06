@@ -6,8 +6,9 @@ import { ProjectCard } from "@/components/project-card";
 import { NewProjectModal } from "@/components/new-project-modal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, Users, FolderOpen } from "lucide-react";
+import { Search, Users, FolderOpen, LogOut } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/contexts/auth-context";
 
 const mockProjects: Project[] = [
   {
@@ -53,9 +54,16 @@ const mockProjects: Project[] = [
 
 export default function Dashboard() {
   const router = useRouter();
+  const { user, isLoading, logout } = useAuth();
   const [projects, setProjects] = useState<Project[]>(mockProjects);
   const [searchTerm, setSearchTerm] = useState("");
   const [filteredProjects, setFilteredProjects] = useState<Project[]>(mockProjects);
+
+  useEffect(() => {
+    if (!isLoading && !user) {
+      router.push("/");
+    }
+  }, [user, isLoading, router]);
 
   useEffect(() => {
     const filtered = projects.filter(project =>
@@ -64,6 +72,21 @@ export default function Dashboard() {
     );
     setFilteredProjects(filtered);
   }, [projects, searchTerm]);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return null;
+  }
 
   const handleCreateProject = (data: CreateProjectData) => {
     const teamMembers: TeamMember[] = data.teamMemberEmails.map((email, index) => ({
@@ -104,14 +127,20 @@ export default function Dashboard() {
                 <p className="text-sm text-muted-foreground">Team Collaboration Platform</p>
               </div>
             </div>
-            <NewProjectModal onCreateProject={handleCreateProject} />
+            <div className="flex items-center gap-3">
+              <NewProjectModal onCreateProject={handleCreateProject} />
+              <Button variant="outline" size="sm" onClick={logout}>
+                <LogOut className="h-4 w-4 mr-2" />
+                Sign Out
+              </Button>
+            </div>
           </div>
         </div>
       </header>
 
       <main className="container mx-auto px-4 py-8">
         <div className="mb-8">
-          <h2 className="text-3xl font-bold mb-2">Welcome back!</h2>
+          <h2 className="text-3xl font-bold mb-2">Welcome back, {user.name}!</h2>
           <p className="text-muted-foreground">
             Manage your projects and collaborate with your team in one place.
           </p>
