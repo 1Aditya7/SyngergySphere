@@ -2,12 +2,31 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { TaskLite, TaskStatus } from "@/lib/types";
-import { getTasks, createTask, updateTask, nextStatus } from "@/lib/api";
+import { getTasks, createTask, updateTask } from "@/lib/api";
 import Column from "./Column";
 import NewTaskModal from "./NewTaskModal";
 import type { MemberLite } from "./AssigneeCombobox";
 import { mockMembers } from "@/mocks/members";
 import type { TagLite } from "./TagSelector";
+import FiltersBar, { Filters } from "./FiltersBar";
+import TaskDetailDrawer from "./TaskDetailDrawer";
+
+// dnd-kit
+import {
+  DndContext,
+  DragEndEvent,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  useDroppable,
+  DragOverlay,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 export default function Board({
   projectId,
@@ -16,24 +35,32 @@ export default function Board({
   projectId: string;
   currentUserId?: string;
 }) {
-  // tasks
+  // tasks & members
   const [tasks, setTasks] = useState<TaskLite[]>([]);
   const [loading, setLoading] = useState(true);
-
-  // members
   const [members, setMembers] = useState<MemberLite[]>([]);
-
-  // tags (local pool for now; swap to API later)
-  const [tagsPool, setTagsPool] = useState<TagLite[]>([
+  const [tagsPool] = useState<TagLite[]>([
     { id: "t-bug", name: "bug" },
     { id: "t-ui", name: "ui" },
     { id: "t-backend", name: "backend" },
   ]);
 
-  // modals
+  // modals/drawer
   const [createOpen, setCreateOpen] = useState(false);
-  const [editOpen, setEditOpen] = useState(false);
-  const [editing, setEditing] = useState<TaskLite | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [activeTask, setActiveTask] = useState<TaskLite | null>(null);
+
+  // DnD active for overlay
+  const [draggingTask, setDraggingTask] = useState<TaskLite | null>(null);
+
+  // filters
+  const [filters, setFilters] = useState<Filters>({
+    status: "ALL",
+    assigneeId: "ALL",
+    tagId: "ALL",
+    from: null,
+    to: null,
+  });
 
   // load tasks
   useEffect(() => {
@@ -43,8 +70,6 @@ export default function Board({
       try {
         const data = await getTasks(projectId);
         if (on) setTasks(Array.isArray(data) ? data : []);
-      } catch {
-        if (on) setTasks([]);
       } finally {
         if (on) setLoading(false);
       }
@@ -54,15 +79,16 @@ export default function Board({
     };
   }, [projectId]);
 
-  // load members (fallback to mocks)
+  // load members
   useEffect(() => {
     let on = true;
     (async () => {
       try {
-        const r = await fetch(`/api/projects/${projectId}/members`, { cache: "no-store" });
-        if (!r.ok) throw new Error();
-        const data = (await r.json()) as MemberLite[];
-        if (on) setMembers(data);
+        const r = await fetch(`/api/projects/${projectId}/members`, {
+          cache: "no-store",
+        });
+        const data = r.ok ? await r.json() : [];
+        if (on) setMembers(data.length ? data : (mockMembers as MemberLite[]));
       } catch {
         if (on) setMembers(mockMembers as MemberLite[]);
       }
@@ -72,12 +98,54 @@ export default function Board({
     };
   }, [projectId]);
 
-  // group
+  // filtering
+  const filtered = useMemo(() => {
+    return tasks.filter((t) => {
+      if (filters.status && filters.status !== "ALL" && t.status !== filters.status)
+        return false;
+      if (filters.assigneeId && filters.assigneeId !== "ALL") {
+        if ((filters.assigneeId as string) === "__unassigned__") {
+          if (t.assignee) return false;
+        } else if (t.assignee?.id !== filters.assigneeId) return false;
+      }
+      if (filters.q) {
+        const q = filters.q.toLowerCase();
+        const text = `${t.title} ${t.description || ""}`.toLowerCase();
+        if (!text.includes(q)) return false;
+      }
+      if (filters.from || filters.to) {
+        const d = t.dueAt ? new Date(t.dueAt) : null;
+        if (d) {
+          const from = filters.from ?? new Date(0);
+          const to = filters.to ?? new Date(8640000000000000);
+          if (!(d >= from && d <= to)) return false;
+        } else if (filters.from || filters.to) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [tasks, filters]);
+
+  // group by status
   const byStatus = useMemo(() => {
-    const map: Record<TaskStatus, TaskLite[]> = { TODO: [], IN_PROGRESS: [], DONE: [] };
-    for (const t of tasks) map[t.status].push(t);
+    const map: Record<TaskStatus, TaskLite[]> = {
+      TODO: [],
+      IN_PROGRESS: [],
+      DONE: [],
+    };
+    for (const t of filtered) {
+      const key: TaskStatus =
+        t.status === "IN_PROGRESS" || t.status === "DONE" ? t.status : "TODO";
+      map[key].push(t);
+    }
     return map;
-  }, [tasks]);
+  }, [filtered]);
+
+  // DnD sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } })
+  );
 
   // CREATE
   async function handleCreate(payload: {
@@ -92,56 +160,63 @@ export default function Board({
     setTasks((prev) => [t, ...prev]);
   }
 
-  // ADVANCE
-  async function handleAdvance(t: TaskLite) {
-    const s = nextStatus(t.status);
-    setTasks((prev) => prev.map((x) => (x.id === t.id ? { ...x, status: s } : x)));
-    try {
-      await updateTask(projectId, t.id, { status: s });
-    } catch {
-      setTasks((prev) => prev.map((x) => (x.id === t.id ? { ...x, status: t.status } : x)));
-    }
+  // DETAIL open
+  function openTask(t: TaskLite) {
+    setActiveTask(t);
+    setDetailOpen(true);
   }
 
-  // EDIT
-  function openEdit(t: TaskLite) {
-    setEditing(t);
-    setEditOpen(true);
-  }
-  async function handleEditSave(payload: {
-    title?: string;
-    description?: string;
-    assigneeId?: string;
-    dueAt?: string;
-    tags?: { id?: string; name: string }[];
-  }) {
-    if (!editing) return;
+  // Save from detail drawer
+  async function saveDetail(id: string, delta: any) {
     setTasks((prev) =>
       prev.map((x) =>
-        x.id === editing.id
+        x.id === id
           ? {
               ...x,
-              ...payload,
+              ...delta,
               assignee:
-                payload.assigneeId !== undefined
-                  ? payload.assigneeId
-                    ? {
-                        id: payload.assigneeId,
-                        name:
-                          members.find((m) => m.id === payload.assigneeId)?.name ||
-                          "Member",
-                        email: "",
-                      }
-                    : null
-                  : x.assignee,
+                delta.assigneeId === undefined
+                  ? x.assignee
+                  : delta.assigneeId
+                  ? {
+                      id: delta.assigneeId,
+                      name:
+                        members.find((m) => m.id === delta.assigneeId)?.name ||
+                        "Member",
+                      email: "",
+                    }
+                  : null,
             }
           : x
       )
     );
     try {
-      await updateTask(projectId, editing.id, payload);
+      await updateTask(projectId, id, delta);
+    } catch {}
+  }
+
+  // Drag end: item moved to another column
+  async function onDragEnd(e: DragEndEvent) {
+    setDraggingTask(null);
+    const taskId = e.active.id as string;
+    const destCol = (e.over?.id as TaskStatus) || null;
+    if (!destCol) return;
+
+    const t = tasks.find((x) => x.id === taskId);
+    if (!t || t.status === destCol) return;
+
+    // optimistic status change
+    setTasks((prev) =>
+      prev.map((x) => (x.id === taskId ? { ...x, status: destCol } : x))
+    );
+    try {
+      await updateTask(projectId, taskId, { status: destCol });
     } catch {
-      // optional: re-fetch
+      setTasks((prev) =>
+        prev.map((x) =>
+          x.id === taskId ? { ...x, status: t.status } : x
+        )
+      );
     }
   }
 
@@ -157,32 +232,62 @@ export default function Board({
         </button>
       </div>
 
+      <FiltersBar members={members} tags={tagsPool} onChange={setFilters} />
+
       {loading ? (
         <div className="text-sm text-gray-500">Loading tasks…</div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-3">
-          <Column
-            title="To-Do"
-            status="TODO"
-            tasks={byStatus.TODO}
-            onAdvance={handleAdvance}
-            onEdit={openEdit}
-          />
-          <Column
-            title="In Progress"
-            status="IN_PROGRESS"
-            tasks={byStatus.IN_PROGRESS}
-            onAdvance={handleAdvance}
-            onEdit={openEdit}
-          />
-          <Column
-            title="Done"
-            status="DONE"
-            tasks={byStatus.DONE}
-            onAdvance={handleAdvance}
-            onEdit={openEdit}
-          />
-        </div>
+        <DndContext
+          sensors={sensors}
+          onDragEnd={onDragEnd}
+          onDragStart={(e) => {
+            const t = tasks.find((x) => x.id === e.active.id);
+            if (t) setDraggingTask(t);
+          }}
+        >
+          <div className="grid gap-4 md:grid-cols-3">
+            <DropColumn id="TODO" title="To-Do">
+              <SortableColumnList
+                columnId="TODO"
+                items={byStatus.TODO}
+                render={(t) => (
+                  <div onClick={() => openTask(t)}>
+                    <Column task={t} />
+                  </div>
+                )}
+              />
+            </DropColumn>
+
+            <DropColumn id="IN_PROGRESS" title="In Progress">
+              <SortableColumnList
+                columnId="IN_PROGRESS"
+                items={byStatus.IN_PROGRESS}
+                render={(t) => (
+                  <div onClick={() => openTask(t)}>
+                    <Column task={t} />
+                  </div>
+                )}
+              />
+            </DropColumn>
+
+            <DropColumn id="DONE" title="Done">
+              <SortableColumnList
+                columnId="DONE"
+                items={byStatus.DONE}
+                render={(t) => (
+                  <div onClick={() => openTask(t)}>
+                    <Column task={t} />
+                  </div>
+                )}
+              />
+            </DropColumn>
+          </div>
+
+          {/* Ghost overlay */}
+          <DragOverlay>
+            {draggingTask ? <Column task={draggingTask} /> : null}
+          </DragOverlay>
+        </DndContext>
       )}
 
       {/* Create */}
@@ -193,33 +298,90 @@ export default function Board({
         initial={null}
         onSubmit={handleCreate}
         projectId={projectId}
-        members={members.length ? members : (mockMembers as MemberLite[])}
+        members={members}
         currentUserId={currentUserId}
         initialTags={tagsPool}
       />
 
-      {/* Edit */}
-      <NewTaskModal
-        open={editOpen}
-        onClose={() => setEditOpen(false)}
-        mode="edit"
-        initial={
-          editing
-            ? {
-                title: editing.title,
-                description: editing.description,
-                assigneeId: editing.assignee?.id,
-                dueAt: editing.dueAt,
-                tags: [], // supply when you persist tags on tasks
-              }
-            : null
-        }
-        onSubmit={handleEditSave}
-        projectId={projectId}
-        members={members.length ? members : (mockMembers as MemberLite[])}
-        currentUserId={currentUserId}
-        initialTags={tagsPool}
+      {/* Detail */}
+      <TaskDetailDrawer
+        open={detailOpen}
+        onClose={() => setDetailOpen(false)}
+        task={activeTask}
+        members={members}
+        onSave={saveDetail}
       />
+    </div>
+  );
+}
+
+/* --- DND helpers --- */
+function DropColumn({
+  id,
+  title,
+  children,
+}: {
+  id: TaskStatus;
+  title: string;
+  children: React.ReactNode;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={`rounded-xl border bg-white p-3 dark:bg-zinc-900 dark:border-zinc-800 min-h-[60vh] transition-colors duration-200 ${
+        isOver ? "bg-blue-50 dark:bg-zinc-800/50" : ""
+      }`}
+    >
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="text-sm font-medium">{title}</h2>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function SortableColumnList({
+  columnId,
+  items,
+  render,
+}: {
+  columnId: TaskStatus;
+  items: TaskLite[];
+  render: (t: TaskLite) => React.ReactNode;
+}) {
+  return (
+    <SortableContext items={items.map((i) => i.id)} strategy={verticalListSortingStrategy}>
+      <div className="space-y-2">
+        {items.map((t) => (
+          <SortableCard key={t.id} id={t.id}>
+            {render(t)}
+          </SortableCard>
+        ))}
+        {items.length === 0 && (
+          <div className="text-xs text-gray-400">No tasks here.</div>
+        )}
+      </div>
+    </SortableContext>
+  );
+}
+
+function SortableCard({ id, children }: { id: string; children: React.ReactNode }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id });
+
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition: transition || "transform 200ms ease", // ✅ smoother
+    opacity: isDragging ? 0.8 : 1,
+    cursor: "grab",
+    zIndex: isDragging ? 50 : "auto",
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
+      {children}
     </div>
   );
 }
