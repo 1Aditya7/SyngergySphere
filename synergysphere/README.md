@@ -1,83 +1,36 @@
-# SynergySphere - Projects Dashboard
+This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
-A team collaboration platform for managing projects, tasks, and team communication.
+## Getting Started
 
-## What it does
+First, run the development server:
 
-This is the projects dashboard where users can:
-- View all their projects in a grid layout
-- See project progress and team members
-- Create new projects with team member invitations
-- Search and filter projects
-- Track project statistics
-
-## How to run
-
-1. Install dependencies:
-```bash
-npm install
-```
-
-2. Start the development server:
 ```bash
 npm run dev
+# or
+yarn dev
+# or
+pnpm dev
+# or
+bun dev
 ```
 
-3. Open http://localhost:3000 in your browser
+Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-## Features
+You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
-### Project Cards
-- Project name and description
-- Progress bar showing completion percentage
-- Team member avatars with initials
-- Click to open project details
+This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
-### New Project Modal
-- Create projects with name and description
-- Add team members by email
-- Form validation
+## Learn More
 
-### Dashboard
-- Statistics showing total projects, team members, completed projects
-- Search bar to find projects
-- Responsive grid layout (1 column on mobile, up to 4 on desktop)
+To learn more about Next.js, take a look at the following resources:
 
-## Tech Stack
+- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
+- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
 
-- Next.js 15 with React 19
-- TypeScript
-- Tailwind CSS v4
-- shadcn/ui components
-- Lucide React icons
+You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
-## API Endpoints
+## Deploy on Vercel
 
-- GET /api/projects - List all projects
-- POST /api/projects - Create new project
-- GET /api/projects/:id/progress - Get project progress
+The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
-## Project Structure
-
-```
-src/
-├── app/
-│   ├── api/projects/          # API routes
-│   ├── page.tsx              # Main dashboard
-│   └── layout.tsx            # App layout
-├── components/
-│   ├── ui/                   # shadcn/ui components
-│   ├── project-card.tsx      # Project card component
-│   └── new-project-modal.tsx # New project form
-├── types/
-│   └── project.ts            # TypeScript interfaces
-└── lib/
-    └── utils.ts              # Utility functions
-```
-
-## Current Status
-
-- Uses mock data for demonstration
-- Ready for database integration
-- Fully responsive design
-- All core features implemented
+Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
