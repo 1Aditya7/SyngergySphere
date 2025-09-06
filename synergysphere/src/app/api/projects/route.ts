@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Project, CreateProjectData, TeamMember } from "@/types/project";
 
-// Mock database - in real app, this would be a database
 let projects: Project[] = [
   {
     id: "1",
@@ -44,7 +43,6 @@ let projects: Project[] = [
   },
 ];
 
-// GET /api/projects - List all projects
 export async function GET() {
   try {
     return NextResponse.json(projects);
@@ -56,12 +54,10 @@ export async function GET() {
   }
 }
 
-// POST /api/projects - Create a new project
 export async function POST(request: NextRequest) {
   try {
     const data: CreateProjectData = await request.json();
     
-    // Validate required fields
     if (!data.name || !data.name.trim()) {
       return NextResponse.json(
         { error: "Project name is required" },
@@ -69,7 +65,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create team members from emails
     const teamMembers: TeamMember[] = data.teamMemberEmails.map((email, index) => ({
       id: `member-${Date.now()}-${index}`,
       name: email.split('@')[0],
@@ -77,7 +72,6 @@ export async function POST(request: NextRequest) {
       initials: email.split('@')[0].substring(0, 2).toUpperCase(),
     }));
 
-    // Create new project
     const newProject: Project = {
       id: `project-${Date.now()}`,
       name: data.name.trim(),
@@ -88,7 +82,6 @@ export async function POST(request: NextRequest) {
       updatedAt: new Date(),
     };
 
-    // Add to projects array
     projects.unshift(newProject);
 
     return NextResponse.json(newProject, { status: 201 });

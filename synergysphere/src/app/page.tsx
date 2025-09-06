@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Search, Users, FolderOpen } from "lucide-react";
 
-// Mock data for demonstration
 const mockProjects: Project[] = [
   {
     id: "1",
@@ -65,7 +64,6 @@ export default function Home() {
   }, [projects, searchTerm]);
 
   const handleCreateProject = (data: CreateProjectData) => {
-    // Create mock team members from emails
     const teamMembers: TeamMember[] = data.teamMemberEmails.map((email, index) => ({
       id: `new-${index}`,
       name: email.split('@')[0],
@@ -87,13 +85,11 @@ export default function Home() {
   };
 
   const handleProjectClick = (project: Project) => {
-    // TODO: Navigate to project detail page
     console.log("Opening project:", project.name);
   };
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
       <header className="border-b bg-card">
         <div className="container mx-auto px-4 py-6">
           <div className="flex items-center justify-between">
@@ -111,9 +107,7 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
-        {/* Welcome Section */}
         <div className="mb-8">
           <h2 className="text-3xl font-bold mb-2">Welcome back!</h2>
           <p className="text-muted-foreground">
@@ -121,7 +115,6 @@ export default function Home() {
           </p>
         </div>
 
-        {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
           <div className="bg-card p-6 rounded-lg border">
             <div className="flex items-center gap-3">
@@ -158,7 +151,6 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Search and Filter */}
         <div className="flex items-center gap-4 mb-6">
           <div className="relative flex-1 max-w-md">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -171,7 +163,6 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Projects Grid */}
         {filteredProjects.length === 0 ? (
           <div className="text-center py-12">
             <FolderOpen className="h-12 w-12 text-muted-foreground mx-auto mb-4" />

@@ -35,7 +35,6 @@ export function ProjectCard({ project, onClick }: ProjectCardProps) {
           {project.description}
         </p>
         
-        {/* Progress Bar */}
         <div className="mb-4">
           <div className="flex justify-between text-xs text-muted-foreground mb-1">
             <span>Progress</span>
@@ -49,7 +48,6 @@ export function ProjectCard({ project, onClick }: ProjectCardProps) {
           </div>
         </div>
         
-        {/* Team Members */}
         <div className="flex items-center justify-between">
           <div className="flex -space-x-2">
             {project.teamMembers.slice(0, 4).map((member) => (
